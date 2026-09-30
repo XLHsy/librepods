@@ -22,9 +22,13 @@ package me.kavishdevar.librepods.presentation.screens
 
 // import me.kavishdevar.librepods.utils.RadareOffsetFinder
 import android.annotation.SuppressLint
+import android.Manifest
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -147,6 +151,12 @@ fun AirPodsSettingsRoute(
     navigateToMicrophoneSettings: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val activityPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.setSoftwareAdaptiveEnabled(true)
+    }
 
     val m3eEnabled = LocalDesignSystem.current == DesignSystem.Material
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + if (m3eEnabled) 0.dp else 84.dp
@@ -174,6 +184,15 @@ fun AirPodsSettingsRoute(
             onAutomaticConnectionChanged = viewModel::setAutomaticConnectionEnabled,
             setDynamicEndOfCharge = viewModel::setDynamicEndOfCharge,
             setOffListeningMode = viewModel::setOffListeningMode,
+            setSoftwareAdaptiveEnabled = { enabled ->
+                if (enabled && context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    activityPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                } else {
+                    viewModel.setSoftwareAdaptiveEnabled(enabled)
+                }
+            },
             disconnect = viewModel::disconnect,
 
             navigateToRename = navigateToRename,
@@ -216,6 +235,7 @@ fun AirPodsSettingsScreen(
         onAutomaticConnectionChanged: (Boolean) -> Unit,
         setDynamicEndOfCharge: (Boolean) -> Unit,
         setOffListeningMode: (Boolean) -> Unit,
+        setSoftwareAdaptiveEnabled: (Boolean) -> Unit,
         disconnect: () -> Unit,
 
         navigateToRename: () -> Unit,
@@ -367,6 +387,43 @@ fun AirPodsSettingsScreen(
                         },
                         showAdaptiveMode = capabilities.contains(Capability.ADAPTIVE_AUDIO),
                     )
+                }
+            }
+
+            if (capabilities.contains(Capability.LISTENING_MODE) &&
+                !capabilities.contains(Capability.ADAPTIVE_AUDIO)
+            ) {
+                item(key = "software_adaptive_spacer") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                item(key = "software_adaptive_toggle") {
+                    StyledToggle(
+                        label = stringResource(R.string.software_adaptive_title),
+                        description = stringResource(R.string.software_adaptive_description),
+                        checked = state.softwareAdaptiveEnabled,
+                        onCheckedChange = setSoftwareAdaptiveEnabled
+                    )
+                }
+                if (state.softwareAdaptiveEnabled) {
+                    item(key = "software_adaptive_status") {
+                        val status = when (state.softwareAdaptiveActivity) {
+                            "STAYING" -> R.string.software_adaptive_staying
+                            "WALKING" -> R.string.software_adaptive_walking
+                            "RUNNING" -> R.string.software_adaptive_running
+                            "TRANSPORT" -> R.string.software_adaptive_transport
+                            "CALL" -> R.string.software_adaptive_call
+                            "MEDIA" -> R.string.software_adaptive_media
+                            "IDLE" -> R.string.software_adaptive_idle
+                            "MANUAL" -> R.string.software_adaptive_manual
+                            else -> R.string.software_adaptive_waiting
+                        }
+                        Text(
+                            text = stringResource(R.string.software_adaptive_current, stringResource(status)),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -974,6 +1031,7 @@ fun AirPodsSettingsScreenPreviewApple() {
                 onAutomaticConnectionChanged = {},
                 setDynamicEndOfCharge = {},
                 setOffListeningMode = {},
+                setSoftwareAdaptiveEnabled = {},
                 disconnect = {},
 
                 navigateToRename = {},
@@ -1021,6 +1079,7 @@ fun AirPodsSettingsScreenPreviewMaterial() {
                 onAutomaticConnectionChanged = {},
                 setDynamicEndOfCharge = {},
                 setOffListeningMode = {},
+                setSoftwareAdaptiveEnabled = {},
                 disconnect = {},
 
                 navigateToRename = {},

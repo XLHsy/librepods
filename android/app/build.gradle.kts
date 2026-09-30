@@ -123,6 +123,8 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    implementation("com.google.android.gms:play-services-location:21.4.0")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.compose.ui.text.google.fonts)

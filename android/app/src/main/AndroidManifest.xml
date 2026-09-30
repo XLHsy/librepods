@@ -33,6 +33,7 @@
         tools:ignore="UnusedAttribute" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 <!--    <uses-permission android:name="android.permission.INTERNET" />-->
@@ -55,6 +56,9 @@
         android:theme="@style/Theme.LibrePods"
         android:description="@string/app_description"
         tools:ignore="UnusedAttribute" >
+        <receiver
+            android:name=".adaptive.SoftwareAdaptiveActivityReceiver"
+            android:exported="false" />
         <receiver
             android:name=".presentation.widgets.NoiseControlWidget"
             android:exported="false">

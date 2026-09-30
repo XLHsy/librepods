@@ -50,6 +50,7 @@ import me.kavishdevar.librepods.data.Battery
 import me.kavishdevar.librepods.data.BatteryComponent
 import me.kavishdevar.librepods.data.BatteryStatus
 import me.kavishdevar.librepods.data.Capability
+import me.kavishdevar.librepods.adaptive.SoftwareAdaptiveController
 import me.kavishdevar.librepods.data.ControlCommandRepository
 import me.kavishdevar.librepods.data.CustomEq
 import me.kavishdevar.librepods.data.StemAction
@@ -67,6 +68,8 @@ data class AirPodsUiState(
 
     val controlStates: Map<ControlCommandIdentifiers, ByteArray> = emptyMap(),
     val offListeningMode: Boolean = true,
+    val softwareAdaptiveEnabled: Boolean = false,
+    val softwareAdaptiveActivity: String = "UNKNOWN",
 
     val battery: List<Battery> = emptyList(),
     val ancMode: Int = 3,
@@ -310,7 +313,8 @@ class AirPodsViewModel(
                 "name" -> loadName()
                 "off_listening_mode", "automatic_ear_detection", "automatic_connection_ctrl_cmd",
                 "head_gestures", "left_long_press_action", "right_long_press_action",
-                "dynamic_end_of_charge", "foss_upgraded", "premium_expiry_time" -> loadSharedPreferences()
+                "dynamic_end_of_charge", "foss_upgraded", "premium_expiry_time",
+                SoftwareAdaptiveController.ENABLED_KEY, SoftwareAdaptiveController.ACTIVITY_KEY -> loadSharedPreferences()
             }
         }
         sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
@@ -389,6 +393,9 @@ class AirPodsViewModel(
     fun setControlCommandInt(
         identifier: ControlCommandIdentifiers, value: Int
     ) {
+        if (identifier == ControlCommandIdentifiers.LISTENING_MODE) {
+            service.onManualListeningModeSelected()
+        }
         setControlCommandValue(identifier, byteArrayOf(value.toByte()))
     }
 
@@ -474,6 +481,8 @@ class AirPodsViewModel(
 
     private fun loadSharedPreferences() {
         val offListeningModeEnabled = sharedPreferences.getBoolean("off_listening_mode", true)
+        val softwareAdaptiveEnabled = sharedPreferences.getBoolean(SoftwareAdaptiveController.ENABLED_KEY, false)
+        val softwareAdaptiveActivity = sharedPreferences.getString(SoftwareAdaptiveController.ACTIVITY_KEY, "UNKNOWN") ?: "UNKNOWN"
         val automaticEarDetectionEnabled =
             sharedPreferences.getBoolean("automatic_ear_detection", true)
         val automaticConnectionEnabled =
@@ -499,6 +508,8 @@ class AirPodsViewModel(
         _uiState.update {
             it.copy(
                 offListeningMode = offListeningModeEnabled,
+                softwareAdaptiveEnabled = softwareAdaptiveEnabled,
+                softwareAdaptiveActivity = softwareAdaptiveActivity,
                 automaticEarDetectionEnabled = automaticEarDetectionEnabled,
                 automaticConnectionEnabled = automaticConnectionEnabled,
                 headGesturesEnabled = headGesturesEnabled,
@@ -566,6 +577,11 @@ class AirPodsViewModel(
         _uiState.update {
             it.copy(offListeningMode = enabled)
         }
+    }
+
+    fun setSoftwareAdaptiveEnabled(enabled: Boolean) {
+        sharedPreferences.edit { putBoolean(SoftwareAdaptiveController.ENABLED_KEY, enabled) }
+        _uiState.update { it.copy(softwareAdaptiveEnabled = enabled) }
     }
 
     fun setHeadGesturesEnabled(enabled: Boolean) {

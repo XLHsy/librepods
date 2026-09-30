@@ -83,6 +83,7 @@ import kotlinx.coroutines.withTimeout
 import me.kavishdevar.librepods.BuildConfig
 import me.kavishdevar.librepods.MainActivity
 import me.kavishdevar.librepods.R
+import me.kavishdevar.librepods.adaptive.SoftwareAdaptiveController
 import me.kavishdevar.librepods.bluetooth.AACPManager
 import me.kavishdevar.librepods.bluetooth.AACPManager.Companion.StemPressType
 import me.kavishdevar.librepods.bluetooth.ATTHandles
@@ -224,6 +225,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     private lateinit var sharedPreferencesLogs: SharedPreferences
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var softwareAdaptiveController: SoftwareAdaptiveController
     private val packetLogKey = "packet_log"
     private val _packetLogsFlow = MutableStateFlow<Set<String>>(emptySet())
     val packetLogsFlow: StateFlow<Set<String>> get() = _packetLogsFlow
@@ -383,6 +385,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
         aacpManager = AACPManager()
         initializeAACPManagerCallback()
+        softwareAdaptiveController = SoftwareAdaptiveController(this, sharedPreferences)
 
         attManager = ATTManagerv2()
 
@@ -599,6 +602,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
         phoneStateListener = object: TelephonyCallback(), TelephonyCallback.CallStateListener {
             override fun onCallStateChanged(state: Int) {
+                softwareAdaptiveController.onCallStateChanged(state != TelephonyManager.CALL_STATE_IDLE)
                 when (state) {
                     TelephonyManager.CALL_STATE_RINGING -> {
                         val leAvailableForAudio =
@@ -701,6 +705,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                     aacpManager.disconnected()
                     BluetoothConnectionManager.aacpSocket = null
                     BluetoothConnectionManager.attSocket = null
+                    softwareAdaptiveController.refresh()
                 }
             }
         }
@@ -933,6 +938,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                         ?.get(0) ?: 0x00.toByte()))
                     sendANCBroadcast()
                     updateNoiseControlWidget()
+                    softwareAdaptiveController.onModeReported(ancNotification.status)
                 }
             }
 
@@ -1067,6 +1073,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                     )
                     if (device != null) setMetadatas(device!!)
                 }
+                softwareAdaptiveController.refresh()
                 sendBroadcast(
                     Intent(AirPodsNotifications.AIRPODS_INFORMATION_UPDATED).setPackage(
                         packageName
@@ -1467,6 +1474,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         if (preferences == null || key == null) return
 
         when (key) {
+            SoftwareAdaptiveController.ENABLED_KEY -> softwareAdaptiveController.refresh()
             "name" -> config.deviceName = preferences.getString(key, "AirPods") ?: "AirPods"
             "mac_address" -> macAddress = preferences.getString(key, "") ?: ""
             "automatic_ear_detection" -> config.earDetectionEnabled =
@@ -2752,6 +2760,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                                 setMetadatas(device)
                             }
                         }
+                        softwareAdaptiveController.refresh()
 
                         updateNotificationContent(
                             true, config.deviceName, batteryNotification.getBattery()
@@ -3014,6 +3023,14 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         return ancNotification.status
     }
 
+    fun onSoftwareAdaptiveActivity(type: Int, confidence: Int) {
+        softwareAdaptiveController.onActivityUpdate(type, confidence)
+    }
+
+    fun onManualListeningModeSelected() {
+        softwareAdaptiveController.onManualModeSelected()
+    }
+
     fun disconnectAudio(context: Context, device: BluetoothDevice?) {
         val bluetoothAdapter = context.getSystemService(BluetoothManager::class.java).adapter
         if (checkSelfPermission("android.permission.BLUETOOTH_PRIVILEGED") == PackageManager.PERMISSION_GRANTED) {
@@ -3164,6 +3181,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     @SuppressLint("MissingPermission")
     override fun onDestroy() {
         clearPacketLogs()
+        softwareAdaptiveController.close()
         Log.d(TAG, "Service stopped is being destroyed for some reason!")
 
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
